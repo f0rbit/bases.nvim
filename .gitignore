@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build artifacts (except main.js - needed for Obsidian plugin distribution)
+dist/
+deps/
+*.tsbuildinfo
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Cache
+.eslintcache
+coverage/

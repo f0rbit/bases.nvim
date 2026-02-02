@@ -1,0 +1,22 @@
+filters: "file.hasTag(\"project\")"
+formulas:
+  double_budget: "budget * 2"
+properties:
+  status:
+    display_name: "Status"
+  budget:
+    display_name: "Budget ($)"
+views:
+  - type: table
+    name: "All Projects"
+    order: [name, status, priority, budget, double_budget]
+    sort:
+      - column: priority
+        direction: ASC
+    summaries:
+      budget: sum
+  - type: table
+    name: "Active Only"
+    filters: "status == \"active\""
+    order: [name, status, budget]
+    limit: 10
