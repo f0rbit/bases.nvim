@@ -26,7 +26,7 @@ View, navigate, and edit [Obsidian Bases](https://obsidian.md/blog/introducing-b
 ```lua
 -- lazy.nvim
 {
-    'obsidian-nvim/bases.nvim',
+    'miller3616/bases.nvim',
     config = function()
         require('bases').setup({
             vault_path = '/path/to/vault',

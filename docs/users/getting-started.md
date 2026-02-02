@@ -16,7 +16,7 @@ Add the following to your Neovim configuration:
 
 ```lua
 {
-    'obsidian-nvim/bases.nvim',
+    'miller3616/bases.nvim',
     ft = 'obsidian_base',
     config = function()
         require('bases').setup({

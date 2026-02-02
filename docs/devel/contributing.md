@@ -9,7 +9,7 @@ This guide is for developers who want to contribute to bases.nvim.
 
 ```lua
 {
-    'obsidian-nvim/bases.nvim',
+    'miller3616/bases.nvim',
     dev = true,
     dir = '/absolute/path/to/your/clone/bases.nvim',
 }
