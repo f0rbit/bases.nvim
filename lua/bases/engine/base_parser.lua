@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/base_parser.lua
+-- Modified: replaced vim.fn.readfile with compat.readfile
+
 ---@class FilterNode
 ---@field type "expression"|"and"|"or"|"not"
 ---@field expression string|nil -- Only for type "expression"
@@ -29,6 +33,8 @@
 ---@field formulas table<string, string>|nil
 ---@field properties table<string, PropertyConfig>|nil
 ---@field views ViewConfig[]
+
+local compat = require("bases.compat")
 
 local M = {}
 
@@ -360,9 +366,9 @@ end
 ---@return QueryConfig|nil, string|nil
 function M.parse(file_path)
 	-- Read file
-	local ok, lines = pcall(vim.fn.readfile, file_path)
-	if not ok then
-		return nil, "Failed to read file: " .. tostring(lines)
+	local lines = compat.readfile(file_path)
+	if not lines then
+		return nil, "Failed to read file: " .. file_path
 	end
 
 	if type(lines) ~= "table" then

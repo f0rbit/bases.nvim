@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/yaml.lua
+-- No modifications from upstream
+
 --- Custom YAML parser for frontmatter and .base files
 --- Supports a subset of YAML 1.1 suitable for Obsidian metadata
 local M = {}

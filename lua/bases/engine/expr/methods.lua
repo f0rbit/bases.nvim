@@ -1,5 +1,10 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/expr/methods.lua
+-- Modified: replaced vim.* calls with compat.* equivalents
+
 ---Type method dispatch for the expression engine
 local types = require("bases.engine.expr.types")
+local compat = require("bases.compat")
 
 local M = {}
 
@@ -130,13 +135,13 @@ function M.dispatch_string(receiver, method_name, args)
 			return types.boolean(false)
 		end
 		local prefix = types.to_string(args[1])
-		return types.boolean(vim.startswith(str, prefix))
+		return types.boolean(compat.startswith(str, prefix))
 	elseif method_name == "endsWith" then
 		if #args == 0 then
 			return types.boolean(false)
 		end
 		local suffix = types.to_string(args[1])
-		return types.boolean(vim.endswith(str, suffix))
+		return types.boolean(compat.endswith(str, suffix))
 	elseif method_name == "isEmpty" then
 		return types.boolean(str == "" or str == nil)
 	elseif method_name == "lower" then
@@ -147,7 +152,7 @@ function M.dispatch_string(receiver, method_name, args)
 		end)
 		return types.string(result)
 	elseif method_name == "trim" then
-		return types.string(vim.trim(str))
+		return types.string(compat.trim(str))
 	elseif method_name == "reverse" then
 		return types.string(str:reverse())
 	elseif method_name == "slice" then
@@ -160,7 +165,7 @@ function M.dispatch_string(receiver, method_name, args)
 		end
 		local old = types.to_string(args[1])
 		local new = types.to_string(args[2])
-		local result = str:gsub(vim.pesc(old), new)
+		local result = str:gsub(compat.pesc(old), new)
 		return types.string(result)
 	elseif method_name == "toString" then
 		return receiver
@@ -237,7 +242,7 @@ function M.string_split(str, args)
 		end
 	else
 		-- Split by separator
-		local pattern = vim.pesc(sep)
+		local pattern = compat.pesc(sep)
 		local pos = 1
 		while true do
 			local start_pos, end_pos = str:find(pattern, pos)
@@ -436,7 +441,7 @@ function M.dispatch_list(receiver, method_name, args, evaluator, raw_args)
 		end
 		return types.list(result)
 	elseif method_name == "sort" then
-		local result = vim.deepcopy(list)
+		local result = compat.deepcopy(list)
 		table.sort(result, function(a, b)
 			local an = types.to_number(a)
 			local bn = types.to_number(b)
@@ -675,7 +680,7 @@ function M.dispatch_file(receiver, method_name, args)
 		end
 		local folder = types.to_string(args[1])
 		local note_folder = note_data.folder or ""
-		return types.boolean(vim.startswith(note_folder, folder) or note_folder == folder)
+		return types.boolean(compat.startswith(note_folder, folder) or note_folder == folder)
 	elseif method_name == "asLink" then
 		local display = note_data.basename
 		if #args >= 1 then
@@ -707,7 +712,7 @@ function M.file_has_tag(note_data, args)
 		-- Check exact match or hierarchy match
 		for note_tag, _ in pairs(note_data.tag_set) do
 			local note_tag_lower = note_tag:lower()
-			if note_tag_lower == tag or vim.startswith(note_tag_lower, tag .. "/") then
+			if note_tag_lower == tag or compat.startswith(note_tag_lower, tag .. "/") then
 				found = true
 				break
 			end

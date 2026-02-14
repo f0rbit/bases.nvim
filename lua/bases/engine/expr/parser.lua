@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/expr/parser.lua
+-- No modifications from upstream
+
 ---@class ASTNode
 ---@field type string
 ---@field value? any

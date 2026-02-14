@@ -1,5 +1,12 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/frontmatter_editor.lua
+-- Modified: replaced vim.fn.readfile/writefile/deepcopy with compat.*
+
 ---@class FrontmatterEditor
 ---@field update_field fun(file_path: string, field_name: string, new_value: any): boolean, string?
+
+local compat = require("bases.compat")
+
 local M = {}
 
 ---Check if a string needs quoting in YAML
@@ -61,11 +68,6 @@ end
 ---@param value any The value to format (string, number, boolean, table, or nil)
 ---@return string[] lines Array of lines to insert (empty for nil value)
 local function format_value(field_name, value)
-  -- Handle vim.NIL (from JSON null)
-  if value == vim.NIL then
-    return {}
-  end
-
   -- Handle nil (delete field)
   if value == nil then
     return {}
@@ -215,8 +217,8 @@ function M.update_field(file_path, field_name, new_value)
   end
 
   -- Read the file
-  local lines = vim.fn.readfile(file_path)
-  if type(lines) ~= "table" then
+  local lines = compat.readfile(file_path)
+  if not lines then
     return false, "Failed to read file: " .. file_path
   end
 
@@ -224,7 +226,7 @@ function M.update_field(file_path, field_name, new_value)
   local fm_start, fm_end = find_frontmatter_bounds(lines)
 
   -- If no frontmatter exists and we're deleting (new_value is nil), success
-  if not fm_start and (new_value == nil or new_value == vim.NIL) then
+  if not fm_start and new_value == nil then
     return true
   end
 
@@ -247,8 +249,8 @@ function M.update_field(file_path, field_name, new_value)
       table.insert(result, line)
     end
 
-    local write_result = vim.fn.writefile(result, file_path)
-    if write_result == -1 then
+    local write_result = compat.writefile(result, file_path)
+    if not write_result then
       return false, "Failed to write file: " .. file_path
     end
     return true
@@ -287,7 +289,7 @@ function M.update_field(file_path, field_name, new_value)
     end
   else
     -- Field doesn't exist, append if we have a value
-    new_fm_lines = vim.deepcopy(fm_lines)
+    new_fm_lines = compat.deepcopy(fm_lines)
 
     if #new_lines > 0 then
       for _, line in ipairs(new_lines) do
@@ -317,8 +319,8 @@ function M.update_field(file_path, field_name, new_value)
   end
 
   -- Write the file
-  local write_result = vim.fn.writefile(result, file_path)
-  if write_result == -1 then
+  local write_result = compat.writefile(result, file_path)
+  if not write_result then
     return false, "Failed to write file: " .. file_path
   end
 

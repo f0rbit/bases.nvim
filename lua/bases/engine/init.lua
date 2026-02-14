@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/init.lua
+-- Modified: simplified facade for new rendering layer
+
 ---Public API for the Obsidian Bases query engine
 ---Replaces the HTTP-based api.lua with a local engine
 

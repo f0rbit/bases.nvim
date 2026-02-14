@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/expr/types.lua
+-- No modifications from upstream
+
 ---@class TypedValue
 ---@field type "string"|"number"|"boolean"|"date"|"list"|"link"|"file"|"duration"|"null"|"regex"|"image"|"object"
 ---@field value any

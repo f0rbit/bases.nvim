@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/expr/functions.lua
+-- No modifications from upstream
+
 ---Global function implementations for the expression engine
 local types = require("bases.engine.expr.types")
 

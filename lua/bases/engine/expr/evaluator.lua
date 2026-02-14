@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/expr/evaluator.lua
+-- No modifications from upstream
+
 ---@class Evaluator
 ---@field note_data NoteData The note being evaluated
 ---@field formulas table<string, string> Map of formula name to expression string

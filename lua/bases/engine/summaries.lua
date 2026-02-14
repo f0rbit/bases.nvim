@@ -1,5 +1,11 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/summaries.lua
+-- Modified: replaced vim.tbl_isempty with compat.tbl_isempty, use serialize module
+
 local types = require("bases.engine.expr.types")
 local evaluator_mod = require("bases.engine.expr.evaluator")
+local compat = require("bases.compat")
+local serialize = require("bases.engine.serialize")
 
 local M = {}
 
@@ -338,8 +344,6 @@ local BUILTIN_SUMMARIES = {
 ---@param serialized_values SerializedValue[]
 ---@return SerializedValue
 local function eval_custom_formula(expression, serialized_values)
-	local query_engine = require("bases.engine.query_engine")
-
 	local typed_items = {}
 	for _, sv in ipairs(serialized_values) do
 		table.insert(typed_items, serialized_to_typed(sv))
@@ -350,7 +354,7 @@ local function eval_custom_formula(expression, serialized_values)
 	evaluator.values_binding = typed_list
 
 	local result = evaluator:eval_string(expression)
-	return query_engine.serialize_value(result)
+	return serialize.serialize_value(result)
 end
 
 ---@class SummaryEntry
@@ -363,7 +367,7 @@ end
 ---@param properties string[]
 ---@return table<string, SummaryEntry>|nil
 function M.compute(summaries_config, entries, properties)
-	if not summaries_config or vim.tbl_isempty(summaries_config) then
+	if not summaries_config or compat.tbl_isempty(summaries_config) then
 		return nil
 	end
 

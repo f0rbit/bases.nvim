@@ -1,8 +1,6 @@
----@class SerializedValue
----@field type "null"|"primitive"|"date"|"link"|"list"|"image"
----@field value any
----@field path string|nil -- for links
----@field iso string|nil -- for dates
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/query_engine.lua
+-- Modified: replaced vim.tbl_* with compat.*, extracted serialize_value to serialize.lua
 
 ---@class SerializedEntry
 ---@field file {path: string, name: string, basename: string}
@@ -19,38 +17,12 @@
 
 local types = require('bases.engine.expr.types')
 local evaluator_mod = require('bases.engine.expr.evaluator')
+local compat = require('bases.compat')
+local serialize = require('bases.engine.serialize')
 
 local M = {}
 
----Serialize a TypedValue to SerializedValue format
----@param tv TypedValue
----@return SerializedValue
-local function serialize_value(tv)
-    if tv.type == "null" then
-        return { type = "null" }
-    elseif tv.type == "string" then
-        return { type = "primitive", value = tv.value }
-    elseif tv.type == "number" then
-        return { type = "primitive", value = tv.value }
-    elseif tv.type == "boolean" then
-        return { type = "primitive", value = tv.value }
-    elseif tv.type == "date" then
-        return { type = "date", value = tv.value, iso = types.date_to_iso(tv.value) }
-    elseif tv.type == "link" then
-        local display = tv.value or tv.path
-        return { type = "link", value = "[[" .. display .. "]]", path = tv.path }
-    elseif tv.type == "list" then
-        local items = {}
-        for _, item in ipairs(tv.value) do
-            table.insert(items, serialize_value(item))
-        end
-        return { type = "list", value = items }
-    elseif tv.type == "image" then
-        return { type = "image", value = tv.value }
-    else
-        return { type = "primitive", value = types.to_string(tv) }
-    end
-end
+local serialize_value = serialize.serialize_value
 
 ---Evaluate a filter node against an evaluator
 ---@param evaluator Evaluator
@@ -168,7 +140,7 @@ end
 ---@param formulas table<string, string>
 ---@return string[] -- ordered list of formula names
 local function topological_sort_formulas(formulas)
-    if not formulas or vim.tbl_isempty(formulas) then
+    if not formulas or compat.tbl_isempty(formulas) then
         return {}
     end
 
@@ -216,8 +188,8 @@ local function topological_sort_formulas(formulas)
     end
 
     -- If we haven't sorted all formulas, there's a cycle - just use arbitrary order
-    if #sorted < vim.tbl_count(formulas) then
-        sorted = vim.tbl_keys(formulas)
+    if #sorted < compat.tbl_count(formulas) then
+        sorted = compat.tbl_keys(formulas)
     end
 
     return sorted

@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/note_index.lua
+-- Modified: uses vim.uv for filesystem (Neovim-only module)
+
 --- Vault index singleton that scans markdown files and builds an in-memory index
 local M = {}
 

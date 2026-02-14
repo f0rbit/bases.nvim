@@ -1,3 +1,7 @@
+-- Forked from miller3616/bases.nvim (GPL-3.0)
+-- Original: lua/bases/engine/file_watcher.lua
+-- Modified: uses vim.uv for filesystem events (Neovim-only module)
+
 ---@class FileWatcher
 ---@field handle userdata|nil The uv_fs_event handle
 ---@field timer userdata|nil The debounce timer handle
