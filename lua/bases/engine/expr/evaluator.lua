@@ -218,7 +218,17 @@ end
 ---@param property string
 ---@return TypedValue
 function Evaluator:resolve_this_property(property)
-	if not self.this_file or not self.this_file.frontmatter then
+	if not self.this_file then
+		return types.null()
+	end
+
+	-- Special case: this.file returns the file itself
+	if property == "file" then
+		return types.file(self.this_file)
+	end
+
+	-- Otherwise look in frontmatter
+	if not self.this_file.frontmatter then
 		return types.null()
 	end
 

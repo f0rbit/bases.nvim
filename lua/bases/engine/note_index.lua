@@ -125,14 +125,16 @@ local function extract_frontmatter(content)
   return frontmatter, body
 end
 
---- Extract wikilinks from markdown body
----@param body string Markdown body text
----@return string[] Array of link targets
-local function extract_links(body)
-  local links = {}
-  local seen = {}
+--- Extract wikilinks from text (body or stringified frontmatter)
+---@param text string Text to scan
+---@param links string[]|nil Existing links array to append to
+---@param seen table<string, boolean>|nil Existing seen set
+---@return string[], table<string, boolean> links array, seen set
+local function extract_links(text, links, seen)
+  links = links or {}
+  seen = seen or {}
 
-  for link in body:gmatch("%[%[([^%]|]+)") do
+  for link in text:gmatch("%[%[([^%]|]+)") do
     local target = link:match("^([^|#]+)")
     if target and not seen[target] then
       table.insert(links, target)
@@ -140,7 +142,21 @@ local function extract_links(body)
     end
   end
 
-  return links
+  return links, seen
+end
+
+--- Recursively extract links from frontmatter values
+---@param value any Frontmatter value (string, table, or primitive)
+---@param links string[] Links array to append to
+---@param seen table<string, boolean> Seen set
+local function extract_links_from_frontmatter(value, links, seen)
+  if type(value) == "string" then
+    extract_links(value, links, seen)
+  elseif type(value) == "table" then
+    for _, v in pairs(value) do
+      extract_links_from_frontmatter(v, links, seen)
+    end
+  end
 end
 
 --- Read and parse a file
@@ -221,12 +237,12 @@ local function create_note_data(vault_path, abs_path, stat)
     end
   end
 
-  -- Extract links
-  local links = extract_links(body or "")
-  local outgoing_link_set = {}
-  for _, link in ipairs(links) do
-    outgoing_link_set[link] = true
+  -- Extract links from body and frontmatter
+  local links, seen = extract_links(body or "")
+  if frontmatter then
+    extract_links_from_frontmatter(frontmatter, links, seen)
   end
+  local outgoing_link_set = seen
 
   return {
     path = rel_path,
@@ -246,7 +262,7 @@ local function create_note_data(vault_path, abs_path, stat)
 end
 
 --- Cache version; bump on schema changes
-local CACHE_VERSION = 2
+local CACHE_VERSION = 3
 
 --- Get the cache file path for a vault
 ---@param vault_path string Absolute path to vault root

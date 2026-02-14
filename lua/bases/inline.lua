@@ -82,11 +82,11 @@ local function resolve_this_file(bufnr)
 end
 
 --- Build virtual line chunks from a rendered line
---- For v1: single chunk per line with BasesTableBorder highlight
 ---@param line string
 ---@return table[] chunks Array of {text, hl_group}
 local function line_to_chunks(line)
-  return { { line, "BasesTableBorder" } }
+  -- Use Normal for content visibility, keep border chars subtle
+  return { { line, "Normal" } }
 end
 
 --- Build error virtual lines
@@ -94,6 +94,51 @@ end
 ---@return table[][] virt_lines
 local function error_virt_lines(msg)
   return { { { "bases.nvim: " .. msg, "ErrorMsg" } } }
+end
+
+--- Track which blocks we've rendered (for mode switching)
+---@type table<integer, { start_line: integer, end_line: integer }[]>
+local rendered_blocks = {}
+
+--- Fold a code block to completely hide it (no vertical space)
+---@param bufnr integer
+---@param block { start_line: integer, end_line: integer }
+local function fold_block(bufnr, block)
+  -- Use nvim_win_call to ensure we're operating on the right window
+  local wins = vim.fn.win_findbuf(bufnr)
+  if #wins == 0 then
+    return
+  end
+  
+  vim.api.nvim_win_call(wins[1], function()
+    -- Create a closed fold over the block lines (1-indexed for vim commands)
+    local start_line = block.start_line + 1
+    local end_line = block.end_line + 1
+    
+    -- Use manual folding
+    vim.wo.foldmethod = "manual"
+    vim.wo.foldenable = true
+    vim.wo.foldtext = "" -- Empty fold text (no "X lines folded" message)
+    
+    -- Create and close the fold
+    vim.cmd(start_line .. "," .. end_line .. "fold")
+  end)
+end
+
+--- Unfold a code block to reveal it
+---@param bufnr integer
+---@param block { start_line: integer, end_line: integer }
+local function unfold_block(bufnr, block)
+  local wins = vim.fn.win_findbuf(bufnr)
+  if #wins == 0 then
+    return
+  end
+  
+  vim.api.nvim_win_call(wins[1], function()
+    local start_line = block.start_line + 1
+    -- Open fold at this line (silent to avoid errors if no fold exists)
+    pcall(vim.cmd, start_line .. "foldopen")
+  end)
 end
 
 --- Render a single block result as extmarks
@@ -115,7 +160,7 @@ local function render_block_result(bufnr, block, generation, result)
 
     local ok, render_mod = pcall(require, "bases.render")
     if not ok then
-      vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.end_line, 0, {
+      vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.start_line, 0, {
         virt_lines = error_virt_lines("render module not available"),
       })
       return
@@ -130,21 +175,34 @@ local function render_block_result(bufnr, block, generation, result)
 
     local lines, _ = render_mod.render(result, config)
     if not lines or #lines == 0 then
-      -- Empty result — show a note
-      vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.end_line, 0, {
-        virt_lines = { { { "bases.nvim: (no results)", "Comment" } } },
+      vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.start_line, 0, {
+        virt_lines = { { { "(no results)", "Comment" } } },
+        virt_lines_above = true,
       })
       return
     end
 
+    -- Build virtual lines for the rendered table
     local virt_lines = {}
     for _, line in ipairs(lines) do
       virt_lines[#virt_lines + 1] = line_to_chunks(line)
     end
 
-    vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.end_line, 0, {
+    -- Track this block for mode-based show/hide
+    rendered_blocks[bufnr] = rendered_blocks[bufnr] or {}
+    table.insert(rendered_blocks[bufnr], { start_line = block.start_line, end_line = block.end_line })
+
+    -- Fold the code block to hide it completely (no vertical space)
+    fold_block(bufnr, block)
+
+    -- Place the table BELOW the line before the fold (so it's visible when folded)
+    -- If block starts at line 0, place above line 0; otherwise place below the previous line
+    local anchor_line = block.start_line > 0 and block.start_line - 1 or 0
+    local above = block.start_line == 0
+    
+    vim.api.nvim_buf_set_extmark(bufnr, ns_id, anchor_line, 0, {
       virt_lines = virt_lines,
-      virt_lines_above = false,
+      virt_lines_above = above,
     })
   end)
 end
@@ -163,15 +221,16 @@ local function render_block_error(bufnr, block, generation, err)
       return
     end
 
-    vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.end_line, 0, {
+    vim.api.nvim_buf_set_extmark(bufnr, ns_id, block.start_line, 0, {
       virt_lines = error_virt_lines(err),
+      virt_lines_above = true,
     })
   end)
 end
 
 --- Render all inline ```base``` blocks in a buffer
 --- Clears previous renders, finds blocks, queries the engine asynchronously,
---- and places virtual lines below each closing ``` fence.
+--- and places virtual lines above each code block (hiding the raw YAML).
 ---@param bufnr integer
 function M.render(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -180,8 +239,16 @@ function M.render(bufnr)
   local gen = (render_generation[bufnr] or 0) + 1
   render_generation[bufnr] = gen
 
-  -- Clear previous extmarks
+  -- Unfold any existing folded blocks before clearing
+  if rendered_blocks[bufnr] then
+    for _, block in ipairs(rendered_blocks[bufnr]) do
+      unfold_block(bufnr, block)
+    end
+  end
+
+  -- Clear previous extmarks and block tracking
   vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
+  rendered_blocks[bufnr] = {}
 
   local engine = require("bases.engine")
 
@@ -204,6 +271,9 @@ function M.render(bufnr)
   if #blocks == 0 then
     return
   end
+
+  -- Setup mode autocmds for this buffer (only once)
+  M.setup_mode_autocmds(bufnr)
 
   local this_file = resolve_this_file(bufnr)
 
@@ -230,7 +300,15 @@ function M.clear(bufnr)
   -- Bump generation so any in-flight queries are discarded
   render_generation[bufnr] = (render_generation[bufnr] or 0) + 1
 
+  -- Unfold any folded blocks
+  if rendered_blocks[bufnr] then
+    for _, block in ipairs(rendered_blocks[bufnr]) do
+      unfold_block(bufnr, block)
+    end
+  end
+
   vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
+  rendered_blocks[bufnr] = nil
 end
 
 --- Check if a buffer has any inline renders
@@ -253,10 +331,92 @@ function M.toggle(bufnr)
   end
 end
 
+--- Show the raw code blocks (unfold them for editing)
+---@param bufnr integer
+function M.show_blocks(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local blocks = rendered_blocks[bufnr]
+  if not blocks then
+    return
+  end
+  for _, block in ipairs(blocks) do
+    unfold_block(bufnr, block)
+  end
+end
+
+--- Hide the raw code blocks (fold them)
+---@param bufnr integer
+function M.hide_blocks(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local blocks = rendered_blocks[bufnr]
+  if not blocks then
+    return
+  end
+  for _, block in ipairs(blocks) do
+    fold_block(bufnr, block)
+  end
+end
+
+--- Check if cursor is inside any rendered block
+---@param bufnr integer
+---@return boolean
+function M.cursor_in_block(bufnr)
+  local blocks = rendered_blocks[bufnr]
+  if not blocks then
+    return false
+  end
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local row = cursor[1] - 1 -- 0-indexed
+  for _, block in ipairs(blocks) do
+    if row >= block.start_line and row <= block.end_line then
+      return true
+    end
+  end
+  return false
+end
+
+--- Setup autocmds for mode-based show/hide of code blocks
+---@param bufnr integer
+function M.setup_mode_autocmds(bufnr)
+  local group = vim.api.nvim_create_augroup("bases_inline_mode_" .. bufnr, { clear = true })
+
+  -- Show blocks when entering insert mode (if cursor is in a block)
+  vim.api.nvim_create_autocmd("InsertEnter", {
+    group = group,
+    buffer = bufnr,
+    callback = function()
+      if M.cursor_in_block(bufnr) then
+        M.show_blocks(bufnr)
+      end
+    end,
+  })
+
+  -- Hide blocks when leaving insert mode
+  vim.api.nvim_create_autocmd("InsertLeave", {
+    group = group,
+    buffer = bufnr,
+    callback = function()
+      M.hide_blocks(bufnr)
+    end,
+  })
+
+  -- Also handle CursorMoved in normal mode to show block when cursor enters
+  vim.api.nvim_create_autocmd("CursorMoved", {
+    group = group,
+    buffer = bufnr,
+    callback = function()
+      -- In normal mode, if cursor moves into a block, show it temporarily
+      -- This is optional - remove if you only want insert mode reveal
+    end,
+  })
+end
+
 --- Clean up generation tracking when a buffer is wiped
 ---@param bufnr integer
 function M.on_buf_delete(bufnr)
   render_generation[bufnr] = nil
+  rendered_blocks[bufnr] = nil
+  pcall(vim.api.nvim_del_augroup_by_name, "bases_inline_mode_" .. bufnr)
 end
 
 return M

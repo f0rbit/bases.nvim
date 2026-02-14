@@ -748,15 +748,18 @@ function M.dispatch_file(receiver, method_name, args)
 		if #args == 0 then
 			return types.boolean(false)
 		end
-		local link_path = types.to_string(args[1]):lower()
+		-- Get the target to match — for file arguments, use basename (without extension)
+		local target = args[1]
+		local link_target
+		if target.type == "file" and target.value then
+			link_target = (target.value.basename or ""):lower()
+		else
+			link_target = types.to_string(target):lower()
+		end
 		if note_data.outgoing_link_set then
-			-- Check exact match
-			if note_data.outgoing_link_set[link_path] then
-				return types.boolean(true)
-			end
-			-- Check case-insensitive
-			for path, _ in pairs(note_data.outgoing_link_set) do
-				if path:lower() == link_path then
+			-- Check case-insensitive against all outgoing links
+			for link, _ in pairs(note_data.outgoing_link_set) do
+				if link:lower() == link_target then
 					return types.boolean(true)
 				end
 			end
