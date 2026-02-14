@@ -260,32 +260,21 @@ function Evaluator:eval_binary_op(node)
 		return types.boolean(self:values_equal(left, right))
 	elseif op == "!=" then
 		return types.boolean(not self:values_equal(left, right))
-	elseif op == "<" then
-		local ln = types.to_number(left)
-		local rn = types.to_number(right)
+	elseif op == "<" or op == ">" or op == "<=" or op == ">=" then
+		-- Coerce string to date when comparing with a date
+		local cl, cr = self:coerce_for_comparison(left, right)
+		local ln = types.to_number(cl)
+		local rn = types.to_number(cr)
 		if ln and rn then
-			return types.boolean(ln < rn)
-		end
-		return types.boolean(false)
-	elseif op == ">" then
-		local ln = types.to_number(left)
-		local rn = types.to_number(right)
-		if ln and rn then
-			return types.boolean(ln > rn)
-		end
-		return types.boolean(false)
-	elseif op == "<=" then
-		local ln = types.to_number(left)
-		local rn = types.to_number(right)
-		if ln and rn then
-			return types.boolean(ln <= rn)
-		end
-		return types.boolean(false)
-	elseif op == ">=" then
-		local ln = types.to_number(left)
-		local rn = types.to_number(right)
-		if ln and rn then
-			return types.boolean(ln >= rn)
+			if op == "<" then
+				return types.boolean(ln < rn)
+			elseif op == ">" then
+				return types.boolean(ln > rn)
+			elseif op == "<=" then
+				return types.boolean(ln <= rn)
+			else
+				return types.boolean(ln >= rn)
+			end
 		end
 		return types.boolean(false)
 	end
@@ -360,6 +349,25 @@ function Evaluator:values_equal(left, right)
 	return ls == rs
 end
 
+---Coerce operands for comparison (string <-> date)
+---@param left TypedValue
+---@param right TypedValue
+---@return TypedValue, TypedValue
+function Evaluator:coerce_for_comparison(left, right)
+	if left.type == "date" and right.type == "string" then
+		local d = types.date_from_iso(right.value)
+		if d then
+			return left, d
+		end
+	elseif left.type == "string" and right.type == "date" then
+		local d = types.date_from_iso(left.value)
+		if d then
+			return d, right
+		end
+	end
+	return left, right
+end
+
 ---Evaluate addition
 ---@param left TypedValue
 ---@param right TypedValue
@@ -375,6 +383,20 @@ function Evaluator:eval_addition(left, right)
 	-- Duration + duration
 	if left.type == "duration" and right.type == "duration" then
 		return types.duration(left.value + right.value)
+	end
+
+	-- Date + string (try to parse as duration, e.g., "7d")
+	if left.type == "date" and right.type == "string" then
+		local dur = types.parse_duration(right.value)
+		if dur then
+			return types.date(left.value + dur)
+		end
+	end
+	if left.type == "string" and right.type == "date" then
+		local dur = types.parse_duration(left.value)
+		if dur then
+			return types.date(right.value + dur)
+		end
 	end
 
 	-- String concatenation
@@ -410,6 +432,14 @@ function Evaluator:eval_subtraction(left, right)
 	-- Duration - duration
 	if left.type == "duration" and right.type == "duration" then
 		return types.duration(left.value - right.value)
+	end
+
+	-- Date - string (try to parse as duration, e.g., "30d")
+	if left.type == "date" and right.type == "string" then
+		local dur = types.parse_duration(right.value)
+		if dur then
+			return types.date(left.value - dur)
+		end
 	end
 
 	-- Numeric subtraction

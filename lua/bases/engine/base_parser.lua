@@ -327,11 +327,12 @@ function M.parse_string(yaml_string)
 				return nil, "Property '" .. name .. "' config must be a table"
 			end
 			config.properties[name] = {}
-			if prop_config.display_name then
-				if type(prop_config.display_name) ~= "string" then
-					return nil, "Property '" .. name .. "' display_name must be a string"
+			local dn = prop_config.displayName or prop_config.display_name
+			if dn then
+				if type(dn) ~= "string" then
+					return nil, "Property '" .. name .. "' displayName must be a string"
 				end
-				config.properties[name].display_name = prop_config.display_name
+				config.properties[name].display_name = dn
 			end
 		end
 	end

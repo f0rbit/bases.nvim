@@ -116,12 +116,16 @@ local function collect_candidates(note_index, global_filters)
         return results
     elseif hint and hint.type == "folder" and note_index.by_folder then
         -- by_folder stores path->true sets, resolve to NoteData array
-        local path_set = note_index.by_folder[hint.value] or {}
+        -- Match exact folder and all subfolders (consistent with file.inFolder semantics)
         local results = {}
-        for path, _ in pairs(path_set) do
-            local note = note_index:get(path)
-            if note then
-                table.insert(results, note)
+        for folder_path, path_set in pairs(note_index.by_folder) do
+            if folder_path == hint.value or compat.startswith(folder_path, hint.value .. "/") then
+                for path, _ in pairs(path_set) do
+                    local note = note_index:get(path)
+                    if note then
+                        table.insert(results, note)
+                    end
+                end
             end
         end
         return results

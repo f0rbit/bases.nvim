@@ -8,6 +8,93 @@ local compat = require("bases.compat")
 
 local M = {}
 
+---Convert Obsidian/moment.js date format tokens to strftime tokens
+---@param pattern string
+---@return string
+local function obsidian_to_strftime(pattern)
+	local result = {}
+	local i = 1
+	local len = #pattern
+
+	while i <= len do
+		-- Handle bracketed literals: [text] → text
+		if pattern:sub(i, i) == "[" then
+			local close = pattern:find("]", i + 1, true)
+			if close then
+				table.insert(result, pattern:sub(i + 1, close - 1))
+				i = close + 1
+			else
+				table.insert(result, "[")
+				i = i + 1
+			end
+		-- 4-char tokens
+		elseif pattern:sub(i, i + 3) == "YYYY" then
+			table.insert(result, "%Y")
+			i = i + 4
+		elseif pattern:sub(i, i + 3) == "MMMM" then
+			table.insert(result, "%B")
+			i = i + 4
+		elseif pattern:sub(i, i + 3) == "dddd" then
+			table.insert(result, "%A")
+			i = i + 4
+		-- 3-char tokens
+		elseif pattern:sub(i, i + 2) == "MMM" then
+			table.insert(result, "%b")
+			i = i + 3
+		elseif pattern:sub(i, i + 2) == "ddd" then
+			table.insert(result, "%a")
+			i = i + 3
+		-- 2-char tokens
+		elseif pattern:sub(i, i + 1) == "YY" then
+			table.insert(result, "%y")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "MM" then
+			table.insert(result, "%m")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "DD" then
+			table.insert(result, "%d")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "dd" then
+			table.insert(result, "%a")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "HH" then
+			table.insert(result, "%H")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "hh" then
+			table.insert(result, "%I")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "mm" then
+			table.insert(result, "%M")
+			i = i + 2
+		elseif pattern:sub(i, i + 1) == "ss" then
+			table.insert(result, "%S")
+			i = i + 2
+		-- 1-char tokens
+		elseif pattern:sub(i, i) == "D" then
+			table.insert(result, "%e")
+			i = i + 1
+		elseif pattern:sub(i, i) == "d" then
+			table.insert(result, "%w")
+			i = i + 1
+		elseif pattern:sub(i, i) == "M" then
+			table.insert(result, "%m")
+			i = i + 1
+		elseif pattern:sub(i, i) == "A" then
+			table.insert(result, "%p")
+			i = i + 1
+		elseif pattern:sub(i, i) == "a" then
+			table.insert(result, "%p")
+			i = i + 1
+		-- Pass through everything else (separators, spaces, literals)
+		else
+			table.insert(result, pattern:sub(i, i))
+			i = i + 1
+		end
+	end
+
+	return table.concat(result)
+end
+
 ---Dispatch a method call on a typed value
 ---@param receiver TypedValue The object to call the method on
 ---@param method_name string The method name
@@ -321,7 +408,8 @@ function M.dispatch_date(receiver, method_name, args)
 			return types.string(types.date_to_iso(ms))
 		end
 		local pattern = types.to_string(args[1])
-		return types.string(os.date(pattern, math.floor(ms / 1000)))
+		local strftime_pattern = obsidian_to_strftime(pattern)
+		return types.string(os.date(strftime_pattern, math.floor(ms / 1000)))
 	elseif method_name == "relative" then
 		return M.date_relative(ms)
 	elseif method_name == "isEmpty" then
