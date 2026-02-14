@@ -339,9 +339,8 @@ function M.render(result, opts)
   add_line(render_border(widths, b, b.l, b.x, b.r))
   add_full_line_hl(#lines - 1, "BasesTableBorder")
 
-  -- 4. Data rows
-  local entries = result.entries or {}
-  for row_idx, entry in ipairs(entries) do
+  -- Helper: render a single entry row
+  local function render_entry_row(entry, row_idx)
     local cells = {}
     local cell_svs = {}
     for i, prop in ipairs(props) do
@@ -359,11 +358,10 @@ function M.render(result, opts)
     end
     add_full_line_hl(line_idx, row_group)
 
-    -- Per-cell highlights
-    byte_pos = 0
+    local byte_pos = 0
     for i = 1, #props do
       local sv = cell_svs[i]
-      sep_len = #b.v
+      local sep_len = #b.v
       add_hl(line_idx, byte_pos, byte_pos + sep_len, "BasesTableBorder")
       byte_pos = byte_pos + sep_len
       local cell_start = byte_pos + 1
@@ -375,8 +373,43 @@ function M.render(result, opts)
       end
       byte_pos = cell_end + 1
     end
-    sep_len = #b.v
+    local sep_len = #b.v
     add_hl(line_idx, byte_pos, byte_pos + sep_len, "BasesTableBorder")
+  end
+
+  -- Helper: add a group separator + header
+  local function render_group_header(header_text)
+    add_line(render_border(widths, b, b.l, b.x, b.r))
+    add_full_line_hl(#lines - 1, "BasesTableBorder")
+
+    local total_inner = 0
+    for _, w in ipairs(widths) do total_inner = total_inner + w + 2 end
+    total_inner = total_inner + #widths - 1
+    local padded = " " .. header_text .. string.rep(" ", math.max(0, total_inner - strwidth(header_text) - 1))
+    add_line(b.v .. padded .. b.v)
+    add_hl(#lines - 1, #b.v, #b.v + #padded, "BasesTableGroupHeader")
+
+    add_line(render_border(widths, b, b.l, b.x, b.r))
+    add_full_line_hl(#lines - 1, "BasesTableBorder")
+  end
+
+  -- 4. Data rows
+  if result.groups then
+    local global_row_idx = 0
+    for _, group in ipairs(result.groups) do
+      local header_text = group.header
+      if header_text == "" then header_text = "(ungrouped)" end
+      render_group_header(header_text)
+
+      for _, entry_idx in ipairs(group.entry_indices) do
+        global_row_idx = global_row_idx + 1
+        render_entry_row(result.entries[entry_idx], global_row_idx)
+      end
+    end
+  else
+    for row_idx, entry in ipairs(result.entries or {}) do
+      render_entry_row(entry, row_idx)
+    end
   end
 
   -- 5. Summary section

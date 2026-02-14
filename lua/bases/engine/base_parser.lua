@@ -22,6 +22,7 @@
 ---@field filters FilterNode|nil
 ---@field sort SortConfig[]|nil
 ---@field group_by string|nil
+---@field group_by_direction "ASC"|"DESC"|nil
 ---@field image string|nil -- For cards view
 ---@field lat string|nil -- For map view
 ---@field long string|nil -- For map view
@@ -219,12 +220,20 @@ local function parse_view(view_data, index)
 		end
 	end
 
-	-- Parse group_by
-	if view_data.group_by then
-		if type(view_data.group_by) ~= "string" then
-			return nil, "View group_by must be a string"
+	-- Parse group_by / groupBy
+	local group_by_data = view_data.group_by or view_data.groupBy
+	if group_by_data then
+		if type(group_by_data) == "string" then
+			view.group_by = normalize_property_name(group_by_data)
+		elseif type(group_by_data) == "table" then
+			-- Obsidian format: { property: "col", direction: "ASC"|"DESC" }
+			if group_by_data.property then
+				view.group_by = normalize_property_name(group_by_data.property)
+				view.group_by_direction = group_by_data.direction or "ASC"
+			end
+		else
+			return nil, "View group_by must be a string or table"
 		end
-		view.group_by = normalize_property_name(view_data.group_by)
 	end
 
 	-- Parse filters

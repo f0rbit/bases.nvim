@@ -6,6 +6,10 @@
 ---@field file {path: string, name: string, basename: string}
 ---@field values table<string, SerializedValue>
 
+---@class GroupData
+---@field header string
+---@field entry_indices number[]
+
 ---@class SerializedResult
 ---@field properties string[] -- ordered list of column names
 ---@field entries SerializedEntry[]
@@ -14,6 +18,7 @@
 ---@field propertyLabels table<string, string>
 ---@field views {count: number, current: number, names: string[]}
 ---@field summaries table<string, SummaryEntry>|nil
+---@field groups GroupData[]|nil
 
 local types = require('bases.engine.expr.types')
 local evaluator_mod = require('bases.engine.expr.evaluator')
@@ -323,6 +328,22 @@ function M.execute(query_config, note_index, view_index, this_file)
     -- 4. Topological sort formulas
     local formula_order = topological_sort_formulas(query_config.formulas)
 
+    -- 4b. Ensure group_by property is evaluated even if not in visible properties
+    local group_by_hidden = false
+    if view.group_by then
+        local found = false
+        for _, prop in ipairs(properties) do
+            if prop == view.group_by then
+                found = true
+                break
+            end
+        end
+        if not found then
+            table.insert(properties, view.group_by)
+            group_by_hidden = true
+        end
+    end
+
     -- 5 & 6. Filter and build entries
     local entries = {}
     for _, note in ipairs(candidates) do
@@ -348,14 +369,128 @@ function M.execute(query_config, note_index, view_index, this_file)
         ::continue::
     end
 
-    -- 8. Compute summaries (on all filtered entries, before limit)
+    -- 8. Sort entries
+    if view.sort and #view.sort > 0 then
+        table.sort(entries, function(a, b)
+            for _, sort_spec in ipairs(view.sort) do
+                local prop = sort_spec.column
+                local sv_a = a.values[prop]
+                local sv_b = b.values[prop]
+
+                -- Extract comparable values
+                local val_a = sv_a and sv_a.value
+                local val_b = sv_b and sv_b.value
+
+                -- Handle nulls (nulls sort to end)
+                local a_null = sv_a == nil or sv_a.type == "null"
+                local b_null = sv_b == nil or sv_b.type == "null"
+                if a_null and b_null then goto next_sort end
+                if a_null then return sort_spec.direction == "DESC" end
+                if b_null then return sort_spec.direction ~= "DESC" end
+
+                -- For dates, compare the raw numeric value
+                if sv_a.type == "date" and sv_b.type == "date" then
+                    val_a = sv_a.value  -- milliseconds timestamp
+                    val_b = sv_b.value
+                end
+
+                -- Compare values
+                if val_a ~= val_b then
+                    if sort_spec.direction == "DESC" then
+                        return val_a > val_b
+                    else
+                        return val_a < val_b
+                    end
+                end
+
+                ::next_sort::
+            end
+            return false
+        end)
+    end
+
+    -- 9. Group entries by group_by property
+    local groups = nil
+    if view.group_by then
+        groups = {}
+        local group_map = {}
+
+        if view.group_by_direction then
+            table.sort(entries, function(a, b)
+                local sv_a = a.values[view.group_by]
+                local sv_b = b.values[view.group_by]
+                local a_null = sv_a == nil or sv_a.type == "null"
+                local b_null = sv_b == nil or sv_b.type == "null"
+                if a_null and b_null then return false end
+                if a_null then return view.group_by_direction == "DESC" end
+                if b_null then return view.group_by_direction ~= "DESC" end
+                local val_a = sv_a.value
+                local val_b = sv_b.value
+                if val_a ~= val_b then
+                    if view.group_by_direction == "DESC" then
+                        return val_a > val_b
+                    else
+                        return val_a < val_b
+                    end
+                end
+                return false
+            end)
+        end
+
+        for i, entry in ipairs(entries) do
+            local sv = entry.values[view.group_by]
+            local group_value = ""
+            if sv and sv.type ~= "null" then
+                if sv.type == "list" then
+                    group_value = tostring(sv.value)
+                else
+                    group_value = tostring(sv.value)
+                end
+            end
+
+            if not group_map[group_value] then
+                group_map[group_value] = #groups + 1
+                table.insert(groups, {
+                    header = group_value,
+                    entry_indices = {},
+                })
+            end
+            table.insert(groups[group_map[group_value]].entry_indices, i)
+        end
+    end
+
+    -- 9b. Remove hidden group_by property from visible output
+    if group_by_hidden then
+        -- Remove from properties list
+        for i = #properties, 1, -1 do
+            if properties[i] == view.group_by then
+                table.remove(properties, i)
+                break
+            end
+        end
+        -- Remove from entry values so it doesn't render as a column
+        for _, entry in ipairs(entries) do
+            entry.values[view.group_by] = nil
+        end
+    end
+
+    -- 10. Compute summaries (on all filtered entries, before limit)
     local summaries_result = nil
     if view.summaries then
         local summaries_mod = require('bases.engine.summaries')
         summaries_result = summaries_mod.compute(view.summaries, entries, properties)
     end
 
-    -- 9. Build metadata
+    -- 10. Apply limit
+    if view.limit and view.limit > 0 and #entries > view.limit then
+        local limited = {}
+        for i = 1, view.limit do
+            limited[i] = entries[i]
+        end
+        entries = limited
+    end
+
+    -- 11. Build metadata
     local default_sort = nil
     if view.sort and #view.sort > 0 then
         default_sort = {
@@ -397,6 +532,7 @@ function M.execute(query_config, note_index, view_index, this_file)
         propertyLabels = property_labels,
         views = views_meta,
         summaries = summaries_result,
+        groups = groups,
     }
 end
 
